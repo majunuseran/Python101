@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "sku_name": {
+      "value": "S1"
+    },
+    "environment": {
+      "value": "Dev"
+    },
+    "sku_units": {
+      "value": "1"
+    },
+    "d2c_partitions": {
+      "value": "4"
+    },
+    "webHookUrl": {
+      "value": "https://ttcdemoviewer.azurewebsites.net/api/message"
+    },
+    "functionappName": {
+      "value": "ServiceBusTriggerFunctionAppDev"
+    },
+    "servicePlanName": {
+      "value": "ToroSmrtscapeServicePlanDev"
+    }
+  }
+}

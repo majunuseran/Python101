@@ -1,0 +1,429 @@
+{
+  "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "randomValue": {
+      "defaultValue": "[substring(uniqueString(utcNow()),0,8)]",
+      "type": "string",
+      "metadata": {
+        "description": "Random alphanumeric string to make the assets have a unique name."
+      }
+    },
+    "webHookUrl": {
+      "type": "string",
+      "metadata": {
+        "description": "The URL (End point of the web API deployed on the server) to POST incoming meesage to webserver"
+      }
+    },
+    "subscriptionId": {
+      "type": "string",
+      "defaultValue": "[subscription().subscriptionid]",
+      "metadata": {
+        "description": "The subscription ID of the Azure subscription to deploy into."
+      }
+    },
+    "environment": {
+      "type": "string",
+      "defaultValue": "Dev",
+      "metadata": {
+        "description": "Specifies the name of the environment to deploy."
+      }
+    },
+    "namespace": {
+      "type": "string",
+      "minLength": 3,
+      "defaultValue": "ToroSmrtscape",
+      "metadata": {
+        "description": "Specifies the name of the IoT Hub."
+      }
+    },
+    "IoTHubName_in": {
+      "type": "string",
+      "minLength": 3,
+      "defaultValue": "[concat(parameters('namespace'), parameters('environment'),'IotHub')]",
+      "metadata": {
+        "description": "Specifies the name of the IoT Hub."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "The datacenter to use for the deployment."
+      }
+    },
+    "consumer_group": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('namespace'), parameters('environment'),'Consumers')]",
+      "metadata": {
+        "description": "The consumer group to assign to the messages for use in ASA."
+      }
+    },
+    "sku_name": {
+      "type": "string",
+      "defaultValue": "S1",
+      "metadata": {
+        "description": "The SKU to use for the IoT Hub."
+      }
+    },
+    "sku_units": {
+      "type": "string",
+      "defaultValue": "1",
+      "metadata": {
+        "description": "The number of IoT Hub units."
+      }
+    },
+    "d2c_partitions": {
+      "type": "string",
+      "metadata": {
+        "description": "Partitions used for the event stream."
+      }
+    },
+    "storageAccountName_in": {
+      "type": "string",
+      "defaultValue": "storageaccount",
+      "metadata": {
+        "description": "Name of storage account to be created."
+      }
+    },
+    "storageContainerName": {
+      "type": "string",
+      "defaultValue": "storagecontainer",
+      "metadata": {
+        "description": "Name of the container in which to place the routed data."
+      }
+    },
+    "storage_endpoint": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('namespace'), parameters('environment'),'StorageEndpoint')]",
+      "metadata": {
+        "description": "Name of the endpoint for the storage account."
+      }
+    },
+    "service_bus_namespace_in": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('namespace'), parameters('environment'),'ServiceBus')]",
+      "metadata": {
+        "description": "Namespace of the service bus that has the topic to which messages are routed."
+      }
+    },
+    "service_bus_topic_in": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('namespace'), parameters('environment'),'ServiceBusTopic')]",
+      "metadata": {
+        "description": "Name of the service bus topic to which to route messages."
+      }
+    },
+    "service_bus_subscription_in": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('namespace'), parameters('environment'),'ServiceBusSubscription')]",
+      "metadata": {
+        "description": "Name of the service bus topic to which to route messages."
+      }
+    },
+    "service_bus_topic_endpoint": {
+      "type": "string",
+      "defaultValue": "[concat(parameters('namespace'), parameters('environment'),'ServiceBusTopicEndPoint')]",
+      "metadata": {
+        "description": "Endpoint to use for routing messages to the service bus topic."
+      }
+    },
+    "AuthRules_sb_topic": {
+      "type": "string",
+      "defaultValue": "AuthRules_sb_topic",
+      "metadata": {
+        "description": "Authorization rules for the service bus topic."
+      }
+    },
+    "workerSize": {
+      "type": "string",
+      "allowedValues": [
+        "0",
+        "1",
+        "2"
+      ],
+      "defaultValue": "0",
+      "metadata": {
+        "description": "The instance size of the hosting plan (small, medium, or large)."
+      }
+    },
+    "functionappName": {
+      "type": "string",
+      "defaultValue": "ServiceBusTriggerFunctionApp",
+      "metadata": {
+        "description": "The name of the function app that you wish to create."
+      }
+    },
+    "servicePlanName": {
+      "type": "string",
+      "defaultValue": "ToroSmrtscapeServicePlan",
+      "metadata": {
+        "description": "The name of the service plan for function app that you wish to create."
+      }
+    }
+  },
+  "variables": {
+    "topicAuthorizationRuleResourceId": "[resourceId('Microsoft.ServiceBus/namespaces/topics/authorizationRules', variables('service_bus_namespace'), variables('service_bus_topic'), parameters('AuthRules_sb_topic'))]",
+    "iotHubName": "[concat(parameters('IotHubName_in'),'-',parameters('randomValue'))]",
+    "storageAccountName": "[concat(parameters('storageAccountName_in'),parameters('randomValue'))]",
+    "service_bus_namespace": "[concat(parameters('service_bus_namespace_in'),'-',parameters('randomValue'))]",
+    "service_bus_topic": "[concat(parameters('service_bus_topic_in'),'-',parameters('randomValue'))]",
+    "service_bus_topic_subscription": "[concat(parameters('service_bus_subscription_in'),'-',parameters('randomValue'))]",
+    "sbVersion": "2017-04-01"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "name": "[variables('storageAccountName')]",
+      "apiVersion": "2018-07-01",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "Standard_LRS",
+        "tier": "Standard"
+      },
+      "kind": "Storage",
+      "properties": {},
+      "resources": [
+        {
+          "type": "blobServices/containers",
+          "apiVersion": "2018-07-01",
+          "name": "[concat('default/', parameters('storageContainerName'))]",
+          "properties": {
+            "publicAccess": "None"
+          },
+          "dependsOn": [
+            "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+          ]
+        }
+      ]
+    },
+    {
+      "apiVersion": "[variables('sbVersion')]",
+      "name": "[variables('service_bus_namespace')]",
+      "type": "Microsoft.ServiceBus/Namespaces",
+      "location": "[parameters('location')]",
+      "kind": "Messaging",
+      "sku": {
+        "name": "Standard"
+      },
+      "resources": [
+        {
+          "apiVersion": "[variables('sbVersion')]",
+          "name": "[variables('service_bus_topic')]",
+          "type": "Topics",
+          "dependsOn": [
+            "[concat('Microsoft.ServiceBus/namespaces/', variables('service_bus_namespace'))]"
+          ],
+          "properties": {
+            "path": "[variables('service_bus_topic')]"
+          },
+          "resources": [
+            {
+              "apiVersion": "[variables('sbVersion')]",
+              "name": "[variables('service_bus_topic_subscription')]",
+              "type": "Subscriptions",
+              "dependsOn": [
+                "[variables('service_bus_topic')]"
+              ],
+              "properties": {}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "apiVersion": "2018-04-01",
+      "type": "Microsoft.Devices/IotHubs",
+      "name": "[variables('IoTHubName')]",
+      "location": "[parameters('location')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.ServiceBus/namespaces', variables('service_bus_namespace'))]",
+        "[resourceId('Microsoft.ServiceBus/namespaces/topics', variables('service_bus_namespace'), variables('service_bus_topic'))]"
+      ],
+      "properties": {
+        "eventHubEndpoints": {
+          "events": {
+            "retentionTimeInDays": 1,
+            "partitionCount": "[parameters('d2c_partitions')]"
+          }
+        },
+        "routing": {
+          "endpoints": {
+            "serviceBustopics": [
+              {
+                "connectionString": "[Concat('Endpoint=sb://',variables('service_bus_namespace'),'.servicebus.windows.net/;SharedAccessKeyName=',parameters('AuthRules_sb_topic'),';SharedAccessKey=',listkeys(variables('topicAuthorizationRuleResourceId'),variables('sbVersion')).primaryKey,';EntityPath=',variables('service_bus_topic'))]",
+                "name": "[parameters('service_bus_topic_endpoint')]",
+                "subscriptionId": "[parameters('subscriptionId')]",
+                "resourceGroup": "[resourceGroup().Name]"
+              }
+            ],
+            "serviceBusTopics": [],
+            "eventHubs": [],
+            "storageContainers": [
+              {
+                "connectionString": "[Concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageAccountName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), providers('Microsoft.Storage', 'storageAccounts').apiVersions[0]).keys[0].value)]",
+                "containerName": "[parameters('storageContainerName')]",
+                "fileNameFormat": "{iothub}/{partition}/{YYYY}/{MM}/{DD}/{HH}/{mm}",
+                "batchFrequencyInSeconds": 100,
+                "maxChunkSizeInBytes": 104857600,
+                "encoding": "json",
+                "name": "[parameters('storage_endpoint')]",
+                "subscriptionId": "[parameters('subscriptionId')]",
+                "resourceGroup": "[resourceGroup().Name]"
+              }
+            ]
+          },
+          "routes": [
+            {
+              "name": "[concat(parameters('namespace'), parameters('environment'),'StorageRoute')]",
+              "source": "DeviceMessages",
+              "condition": "level=\"storage\"",
+              "endpointNames": [
+                "[parameters('storage_endpoint')]"
+              ],
+              "isEnabled": true
+            },
+            {
+              "name": "[concat(parameters('namespace'), parameters('environment'),'TopicRoute')]",
+              "source": "DeviceMessages",
+              "endpointNames": [
+                "[parameters('service_bus_topic_endpoint')]"
+              ],
+              "isEnabled": true
+            }
+
+          ],
+          "fallbackRoute": {
+            "name": "$fallback",
+            "source": "DeviceMessages",
+            "condition": "true",
+            "endpointNames": [
+              "events"
+            ],
+            "isEnabled": true
+          }
+        },
+        "storageEndpoints": {
+          "$default": {
+            "sasTtlAsIso8601": "PT1H",
+            "connectionString": "",
+            "containerName": ""
+          }
+        },
+        "messagingEndpoints": {
+          "fileNotifications": {
+            "lockDurationAsIso8601": "PT1M",
+            "ttlAsIso8601": "PT1H",
+            "maxDeliveryCount": 10
+          }
+        },
+        "enableFileUploadNotifications": false,
+        "cloudToDevice": {
+          "maxDeliveryCount": 10,
+          "defaultTtlAsIso8601": "PT1H",
+          "feedback": {
+            "lockDurationAsIso8601": "PT1M",
+            "ttlAsIso8601": "PT1H",
+            "maxDeliveryCount": 10
+          }
+        }
+      },
+      "sku": {
+        "name": "[parameters('sku_name')]",
+        "capacity": "[parameters('sku_units')]"
+      }
+    },
+    {
+      "type": "Microsoft.ServiceBus/namespaces/topics/authorizationRules",
+      "name": "[concat(variables('service_bus_namespace'), '/', variables('service_bus_topic'), '/', parameters('AuthRules_sb_topic'))]",
+      "apiVersion": "[variables('sbVersion')]",
+      "location": "[parameters('location')]",
+      "scale": null,
+      "properties": {
+        "rights": [
+          "Listen","Send","Manage"
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ServiceBus/namespaces', variables('service_bus_namespace'))]",
+        "[resourceId('Microsoft.ServiceBus/namespaces/topics', variables('service_bus_namespace'), variables('service_bus_topic'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Devices/IotHubs/eventHubEndpoints/ConsumerGroups",
+      "name": "[concat(variables('iotHubName'), '/events/',parameters('consumer_group'))]",
+      "apiVersion": "2018-04-01",
+      "dependsOn": [
+        "[concat('Microsoft.Devices/Iothubs/', variables('iotHubName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Web/serverfarms",
+      "apiVersion": "2016-09-01",
+      "name": "[parameters('servicePlanName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "S1",
+        "tier": "Standard"
+      },
+      "properties": {
+        "name": "[parameters('servicePlanName')]",
+        "sku": {
+          "name": "Standard",
+          "tier": "Standard"
+        },
+        "workerSize": "[parameters('workerSize')]",
+        "hostingEnvironment": "",
+        "numberOfWorkers": 1
+      }
+    },
+    {
+      "apiVersion": "2016-08-01",
+      "type": "Microsoft.Web/sites",
+      "name": "[parameters('functionappName')]",
+      "location": "[parameters('location')]",
+      "kind": "functionapp",
+      "properties": {
+        "name": "[parameters('functionappName')]",
+        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('servicePlanName'))]",
+        "hostingEnvironment": "",
+        "clientAffinityEnabled": false,
+        "siteConfig": {
+          "alwaysOn": true
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Web/serverfarms', parameters('servicePlanName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ],
+      "resources": [
+        {
+          "apiVersion": "2016-08-01",
+          "name": "appsettings",
+          "type": "config",
+          "dependsOn": [
+            "[resourceId('Microsoft.Web/sites', parameters('functionappName'))]",
+            "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+          ],
+          "properties": {
+            "AzureWebJobsStorage": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageAccountName'),';AccountKey=',listkeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2015-05-01-preview').key1,';')]",
+            "AzureWebJobsDashboard": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageAccountName'),';AccountKey=',listkeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2015-05-01-preview').key1,';')]",
+            "AzureWebJobsServiceBus": "[Concat('Endpoint=sb://',variables('service_bus_namespace'),'.servicebus.windows.net/;SharedAccessKeyName=',parameters('AuthRules_sb_topic'),';SharedAccessKey=',listkeys(variables('topicAuthorizationRuleResourceId'),variables('sbVersion')).primaryKey)]",
+            "topicname": "[variables('service_bus_topic')]",
+            "subscriptionName": "[variables('service_bus_topic_subscription')]",
+            "webHookUrl": "[parameters('webHookUrl')]",
+            "FUNCTIONS_EXTENSION_VERSION": "~1",
+            "SCM_DO_BUILD_DURING_DEPLOYMENT": true
+          }
+        }
+      ]
+    }
+  ],
+  "outputs": {
+    "sbq_connectionString": {
+      "type": "string",
+      "value": "[Concat('Endpoint=sb://',variables('service_bus_namespace'),'.servicebus.windows.net/;SharedAccessKeyName=',parameters('AuthRules_sb_topic'),';SharedAccessKey=',listkeys(variables('topicAuthorizationRuleResourceId'),variables('sbVersion')).primaryKey,';EntityPath=',variables('service_bus_topic'))]"
+    }
+  }
+}
